@@ -5,6 +5,8 @@ This project is one of Mr. Xie Tianze's project assignments for the TikTokTechIm
 
 This project is an implementation of a simple gRPC based chat service. This service uses a SQLite3 database to store and retrieve chat messages. The main features of this service include sending messages to a chat and pulling messages from a chat.
 
+This is the first time I have worked independently on a project, no matter what programming language it is. It was a very rewarding and painful start. There are a few things I haven't implemented yet compared to the official demo and I will continue to learn.
+
 ## Getting Started
 
 Follow the instructions below to get this project running on your local machine for development and testing purposes.

@@ -1,18 +1,11 @@
 FROM golang:1.20
 
-WORKDIR /app
-
-COPY go.mod go.sum ./
-
-RUN go mod download
+WORKDIR /go/src/app
 
 COPY . .
 
-RUN go build -o main .
+RUN go get -d -v ./...
 
-EXPOSE 8080
+RUN go install -v ./...
 
-CMD ["./main"]
-
-
-
+CMD ["app"]

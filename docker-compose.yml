@@ -2,22 +2,26 @@ version: '3.9'
 services:
   rpc-server:
     build:
-      context: ./rpc-server
+      context: ./rpc-server/server
+      dockerfile: Dockerfile
+    volumes:
+      - "./rpc-server/server:/go/src/rpc-server"
     ports:
       - "8888:8888"
     environment:
       - SERVICE_NAME=rpc-server
       - SERVICE_TAGS=rpc
-    depends_on:
-      - etcd
+
   http-server:
     build:
-      context: ./http-server
+      context: ./http-server/server
+      dockerfile: Dockerfile
+    volumes:
+      - "./http-server/server:/go/src/http-server"
     ports:
       - "8080:8080"
     environment:
       - SERVICE_NAME=http-server
       - SERVICE_TAGS=http
     depends_on:
-      - etcd
       - rpc-server

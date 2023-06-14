@@ -1,0 +1,46 @@
+name: Go Test and Coverage
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+
+  test:
+    name: Run tests
+    runs-on: ubuntu-latest
+    steps:
+
+    - name: Check out code into the Go module directory
+      uses: actions/checkout@v2
+
+    - name: Set up Go 1.x
+      uses: actions/setup-go@v2
+      with:
+        go-version: ^1.17
+
+    - name: Test and get coverage
+      run: |
+        cd rpc-server/server
+        go test -v -coverprofile=coverage.out -covermode=atomic ./...
+        cd ../../http-server/server
+        go test -v -coverprofile=coverage.out -covermode=atomic ./...
+      
+    - name: Show coverage
+      run: |
+        cd rpc-server/server
+        go tool cover -func=coverage.out
+        cd ../../http-server/server
+        go tool cover -func=coverage.out
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v1
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        file: ./coverage.out
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: true
+        verbose: true
