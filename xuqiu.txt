@@ -1,14 +1,14 @@
 看起来这是一个相当大的项目，涵盖了分布式系统设计的许多关键方面。我已经理解了你的需求，并根据你的描述和我们已经完成的工作，我建议以下步骤：
 
-服务间通信：你需要一个HTTP服务器接收来自发送者的消息，然后通过RPC调用将消息传递给RPC服务器。这部分你应该已经基本实现。
+-服务间通信：你需要一个HTTP服务器接收来自发送者的消息，然后通过RPC调用将消息传递给RPC服务器。这部分你应该已经基本实现。
 
-消息存储和检索：RPC服务器需要将接收到的消息存储在数据库中，并能够根据Pull请求的参数（chat, cursor和limit）从数据库中检索消息。为了满足性能要求，你可能需要对消息的存储和检索进行优化。你需要选择一个数据库进行实现，MySQL和Redis都是不错的选择。
+-消息存储和检索：RPC服务器需要将接收到的消息存储在数据库中，并能够根据Pull请求的参数（chat, cursor和limit）从数据库中检索消息。为了满足性能要求，你可能需要对消息的存储和检索进行优化。你需要选择一个数据库进行实现，MySQL和Redis都是不错的选择。
 
-Docker部署和Github Actions：你需要设置一个可以运行的docker-compose.yml文件来部署你的服务，以及一个Github Actions流程来自动测试你的代码。你已经给出了这两部分的示例，你需要根据你的代码进行适当的修改。
+-Docker部署和Github Actions：你需要设置一个可以运行的docker-compose.yml文件来部署你的服务，以及一个Github Actions流程来自动测试你的代码。你已经给出了这两部分的示例，你需要根据你的代码进行适当的修改。
 
-性能测试和优化：你需要进行压力测试来确保你的系统能够支持超过20个并发用户。你可能需要使用诸如Goroutines这样的并发模型，以及其他一些性能优化的技术。
+-性能测试和优化：你需要进行压力测试来确保你的系统能够支持超过20个并发用户。你可能需要使用诸如Goroutines这样的并发模型，以及其他一些性能优化的技术。
 
-API设计和版本管理：你已经定义了API的proto文件，你需要根据这个文件生成gRPC的接口代码，并在你的RPC服务器上实现这些接口。在你的HTTP服务器上，你需要将HTTP请求转换为gRPC请求，并将gRPC响应转换为HTTP响应。
+-API设计和版本管理：你已经定义了API的proto文件，你需要根据这个文件生成gRPC的接口代码，并在你的RPC服务器上实现这些接口。在你的HTTP服务器上，你需要将HTTP请求转换为gRPC请求，并将gRPC响应转换为HTTP响应。
 
 文档编写：最后，你需要在README.md中提供项目介绍，包括如何运行代码、代码的结构、使用的技术和设计的理念等。
 
@@ -386,3 +386,507 @@ func main() {
 	}
 }
 我希望你在理解这些之后，帮我重新规划测试文件，并排除错误
+
+
+
+1. 最开始的项目需求：
+
+
+    1. Architecture: The system should contain two services: one HTTP server and one RPC server. The IDL of HTTP API is provided below. The RPC IDL is not restricted, but you can also get an example from the demo repository.
+    2. Data storage: The system should store messages data. Receivers can access this data at any time. At least one database must be used (MySQL or Redis are recommended). There is no limitation on data schema design.
+    3. Message delivery: The system should be able to deliver messages to the intended recipients by PULL mode in a timely and consistent manner. Pull mode means there is no need to maintain the connection and push new messages to receivers in real-time. Only the pull API must be implemented, so the receiver can use pull API to fetch messages.
+    4. Performance and scalability: The system should be designed to handle a relatively large number of users and messages. (Support more than 20 concurrency in testing)
+    5.   - Backend services can be deployed elastically.
+  - Pass stress testing.
+  - Clear presentation README file.
+
+    5.1结构图：
+Sender -send-> HTTP API <-RPC calling-> RPCServer <- write/ read-> DB
+Http API -pull-> Recevier
+
+    6. Submit the source code through a public GitHub repository.Must contain this Github Actions:
+# This workflow will build a golang project
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
+
+name: Tests
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+
+  http-server:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./http-server
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.18
+
+      - name: Build
+        run: go build -v ./...
+
+      - name: Test
+        run: go test -race -cover -coverprofile=coverage.out $(go list ./... | grep -Ev "_gen") -coverpkg $(go list ./... | grep -Ev "_gen" | tr "\n" "," | sed 's/.$//')
+
+      - name: Show coverage
+        run: go tool cover -func=coverage.out | awk 'END {print $NF}'
+
+  rpc-server:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./rpc-server
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.18
+
+      - name: Build
+        run: go build -v ./...
+
+      - name: Test
+        run: go test -race -cover -coverprofile=coverage.out $(go list ./... | grep -Ev "_gen") -coverpkg $(go list ./... | grep -Ev "_gen" | tr "\n" "," | sed 's/.$//')
+
+      - name: Show coverage
+        run: go tool cover -func=coverage.out | awk 'END {print $NF}'
+
+  docker-compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Run Docker Compose
+        run: docker-compose up -d
+
+      - name: Check service status
+        run: |
+          if docker-compose ps | grep -q 'Exit'; then
+            echo "Some services exited unexpectedly"
+            exit 1
+          else
+            echo "All services are running"
+          fi
+
+   7.Must contain a runnable docker-compose.yml file.:
+version: '3.9'
+services:
+  rpc-server:
+    build: rpc-server
+    ports:
+      - "8888:8888"
+    environment:
+      - SERVICE_NAME=rpc-server
+      - SERVICE_TAGS=rpc
+    depends_on:
+      - etcd
+  http-server:
+    build: http-server
+    ports:
+      - "8080:8080"
+    environment:
+      - SERVICE_NAME=http-server
+      - SERVICE_TAGS=http
+    depends_on:
+      - etcd
+      - rpc-server
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.0
+    command: ["etcd", "--advertise-client-urls", "http://etcd:2379", "--listen-client-urls", "http://0.0.0.0:2379"]
+    ports:
+      - "2379:2379"
+
+   以下是API：
+// API for pull mode IM service.
+syntax = "proto3";
+
+package api;
+
+option go_package = "/api";
+
+message Message {
+  string chat = 1;     // format "<member1>:<member2>", e.g. "john:doe"
+  string text = 2;     // message text content
+  string sender = 3;   // sender identifier of the message
+  int64 send_time = 4; // unit: microseconds
+}
+
+message SendRequest {
+  string chat = 1;     // format "<member1>:<member2>", e.g. "john:doe"
+  string text = 2;     // message text content to be sent
+  string sender = 3;   // sender identifier
+}
+
+message SendResponse {} // return a reasonable HTTP status code if error occurs
+
+message PullRequest {
+  string chat = 1;  // format "<member1>:<member2>", e.g. "john:doe"
+  int64 cursor = 2; // starting position of message's send_time, inclusively, 0 by default
+  int32 limit = 3;  // the maximum number of messages returned per request, 10 by default
+  bool reverse = 4; // if false, the results will be sorted in ascending order by time
+}
+
+message PullResponse {
+  repeated Message messages = 1;
+  bool has_more = 2;     // if true, can use next_cursor to pull the next page of messages
+  int64 next_cursor = 3; // starting position of next page, inclusively
+}
+
+service MessageService {
+  rpc Send (SendRequest) returns (SendResponse); // POST
+  rpc Pull (PullRequest) returns (PullResponse); // GET
+}
+8. A brief presentation is recommended to be provided by README.md in the same repository.
+
+2. 我的项目：
+
+1.项目结构图：
+xtz-Server-Assignment-TikTokTechImmersion
+├── .github/workflows
+│   ├── main.yml
+├── api/
+│   ├── api_grpc.pb.go
+│   ├── api.pb.go
+│   ├── api.proto
+│   ├── go.mod
+│   ├── go.sum
+├── http-server/
+│   ├── main.go
+│   ├── db/
+│   │   ├──db.go
+│   │   ├──db_test.go
+│   ├── go.mod
+│   ├── go.sum
+├── rpc-server/
+│   ├── server/
+│   │   ├──server.go
+│   ├── client/
+│   │   ├──client.go
+│   ├── test/
+│   │   ├──rpc-server_test.go
+│   │   ├──rpc-server_test_benchmark.go
+│   ├── go.mod
+│   ├── go.sum
+├── go.work
+├── docker-compose.yml
+├── Dockerfile
+├── README.db
+
+
+
+2.1 server/
+2.1.1server.go:
+
+package server
+
+import (
+	"context"
+	"database/sql"
+	"log"
+	"net"
+	"time"
+
+	api "xtz-Server-Assignment-TikTokTechImmersion/api"
+
+	"google.golang.org/grpc"
+	//"google.golang.org/protobuf/types/known/emptypb"
+)
+
+type Server struct {
+	api.UnimplementedMessageServiceServer
+	DB *sql.DB
+}
+
+func NewServer(db *sql.DB) *Server {
+	return &Server{DB: db}
+}
+
+func (s *Server) Pull(ctx context.Context, in *api.PullRequest) (*api.PullResponse, error) {
+	// Assume we have a table "messages" with columns "chat", "text", "sender", "send_time"
+	rows, err := s.DB.QueryContext(ctx, "SELECT chat, text, sender, send_time FROM messages WHERE chat = ? AND send_time >= ? ORDER BY send_time ASC LIMIT ?",
+		in.GetChat(), in.GetCursor(), in.GetLimit())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var messages []*api.Message
+	for rows.Next() {
+		var msg api.Message
+		if err := rows.Scan(&msg.Chat, &msg.Text, &msg.Sender, &msg.SendTime); err != nil {
+			return nil, err
+		}
+		messages = append(messages, &msg)
+	}
+
+	return &api.PullResponse{Messages: messages}, nil
+}
+
+func (s *Server) Send(ctx context.Context, in *api.SendRequest) (*api.SendResponse, error) {
+	currentTime := time.Now().UnixNano() / int64(time.Millisecond)
+	_, err := s.DB.ExecContext(ctx, "INSERT INTO messages (chat, text, sender, send_time) VALUES (?, ?, ?, ?)", in.GetChat(), in.GetText(), in.GetSender(), currentTime)
+	if err != nil {
+		return nil, err
+	}
+	return &api.SendResponse{}, nil
+}
+
+func (s *Server) Start(lis net.Listener) error {
+	grpcServer := grpc.NewServer()
+
+	// Register our service with the gRPC server
+	api.RegisterMessageServiceServer(grpcServer, s)
+
+	// Serve our gRPC server on the listener interface
+	return grpcServer.Serve(lis)
+}
+
+func main() {
+	// Open database
+	db, err := sql.Open("sqlite3", "./messages.db")
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+	defer db.Close()
+
+	_, err = db.Exec("CREATE TABLE IF NOT EXISTS messages (chat TEXT, text TEXT, sender TEXT, send_time INTEGER)")
+	if err != nil {
+		log.Fatalf("Failed to create table: %v", err)
+	}
+
+	server := NewServer(db)
+
+	// Listen on port 8888
+	lis, err := net.Listen("tcp", ":8888")
+	if err != nil {
+		log.Fatalf("Failed to listen on port 8888: %v", err)
+	}
+
+	// Serve our gRPC server on the listener interface
+	if err := server.Start(lis); err != nil {
+		log.Fatalf("Failed to serve gRPC server: %v", err)
+	}
+}
+2.3test/
+2.3.1rpc-server_test.go:
+package test
+
+import (
+	"context"
+	"database/sql"
+	"net"
+	"testing"
+
+	api "xtz-Server-Assignment-TikTokTechImmersion/api"
+	//"xtz-Server-Assignment-TikTokTechImmersion/rpc-server/client"
+	server "xtz-Server-Assignment-TikTokTechImmersion/rpc-server/server"
+
+	_ "github.com/mattn/go-sqlite3"
+
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/test/bufconn"
+)
+
+const bufSize = 1024 * 1024
+
+var lis *bufconn.Listener
+
+func init() {
+	// Initialize the in-memory buffer connection
+	lis = bufconn.Listen(bufSize)
+}
+
+func bufDialer(context.Context, string) (net.Conn, error) {
+	return lis.Dial()
+}
+
+func TestSendAndPull(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	require.NoError(t, err)
+	defer db.Close()
+
+	_, err = db.Exec("CREATE TABLE IF NOT EXISTS messages (chat TEXT, text TEXT, sender TEXT, send_time INTEGER)")
+	require.NoError(t, err)
+
+	// Create and start server
+	srv := server.NewServer(db)
+	go func() {
+		require.NoError(t, srv.Start(lis))
+	}()
+
+	// Connect to the server
+	conn, err := grpc.DialContext(context.Background(), "bufnet", grpc.WithContextDialer(bufDialer), grpc.WithInsecure())
+	require.NoError(t, err)
+	defer conn.Close()
+
+	// Create client
+	client := api.NewMessageServiceClient(conn)
+
+	// Test send message
+	sendReq := &api.SendRequest{
+		Chat:   "chat1",
+		Text:   "hello",
+		Sender: "user1",
+	}
+	_, err = client.Send(context.Background(), sendReq)
+	require.NoError(t, err)
+
+	// Test pull messages
+	pullReq := &api.PullRequest{
+		Chat:   "chat1",
+		Cursor: 0,
+		Limit:  10,
+	}
+	pullRes, err := client.Pull(context.Background(), pullReq)
+	require.NoError(t, err)
+	require.Len(t, pullRes.Messages, 1)
+	require.Equal(t, "hello", pullRes.Messages[0].Text)
+	require.Equal(t, "user1", pullRes.Messages[0].Sender)
+
+	// Test pull from non-existent chat
+	pullReq = &api.PullRequest{
+		Chat:   "chat2",
+		Cursor: 0,
+		Limit:  10,
+	}
+	pullRes, err = client.Pull(context.Background(), pullReq)
+	require.NoError(t, err)
+	require.Len(t, pullRes.Messages, 0)
+}
+
+2.3.2rpc-server_test_benchmark.go:
+package test
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"net"
+	"sync"
+	"testing"
+
+	api "xtz-Server-Assignment-TikTokTechImmersion/api"
+	server "xtz-Server-Assignment-TikTokTechImmersion/rpc-server/server"
+
+	_ "github.com/mattn/go-sqlite3"
+
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/test/bufconn"
+)
+
+const benchmarkBufSize = 1024 * 1024
+
+var benchmarkLis *bufconn.Listener
+
+func init() {
+	// Initialize the in-memory buffer connection
+	benchmarkLis = bufconn.Listen(benchmarkBufSize)
+}
+
+func benchmarkBufDialer(context.Context, string) (net.Conn, error) {
+	return benchmarkLis.Dial()
+}
+
+func BenchmarkConcurrentUsers(b *testing.B) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	require.NoError(b, err)
+	defer db.Close()
+
+	// Create messages table in the in-memory database
+	_, err = db.Exec("CREATE TABLE IF NOT EXISTS messages (chat TEXT, text TEXT, sender TEXT, send_time INTEGER)")
+	require.NoError(b, err)
+
+	// Create and start server
+	srv := server.NewServer(db)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		err := srv.Start(benchmarkLis)
+		require.NoError(b, err)
+	}()
+
+	wg.Wait() // wait for server to start
+
+	// Connect to the server
+	conn, err := grpc.DialContext(context.Background(), "bufnet", grpc.WithContextDialer(benchmarkBufDialer), grpc.WithInsecure())
+	require.NoError(b, err)
+	defer conn.Close()
+
+	// Create client
+	client := api.NewMessageServiceClient(conn)
+
+	b.SetParallelism(20) // Set the number of parallel benchmarks
+	b.RunParallel(func(pb *testing.PB) {
+		// Each goroutine will send and pull messages until the benchmark is done
+		for pb.Next() {
+			for i := 0; i < 100; i++ { // Each user sends and pulls 100 messages
+				sendReq := &api.SendRequest{
+					Chat:   fmt.Sprintf("chat%d", i),
+					Text:   "hello",
+					Sender: "user1",
+				}
+				_, err := client.Send(context.Background(), sendReq)
+				require.NoError(b, err)
+
+				pullReq := &api.PullRequest{
+					Chat:   fmt.Sprintf("chat%d", i),
+					Cursor: 0,
+					Limit:  10,
+				}
+				_, err = client.Pull(context.Background(), pullReq)
+				require.NoError(b, err)
+			}
+		}
+	})
+}
+
+
+/完毕
+请用英语开始写readme
+
+
+
+如果你的复制粘贴操作没有保留Markdown的格式，可能是因为你的编辑器或者是复制的方式不支持Markdown格式。你可能需要在粘贴的地方手动添加Markdown的格式标记。
+
+比如：
+
+# 表示一级标题
+## 表示二级标题
+### 表示三级标题
+用**包围的文字会显示为粗体
+用*或_包围的文字会显示为斜体
+用`包围的文字会显示为代码格式
+- 或 * 开头的行表示无序列表
+数字后面跟. 表示有序列表
+[链接文字](URL)表示链接
+![描述](URL)表示图片
+对于代码块，你可以使用3个反引号（`）来开始和结束代码块，如下：
+
+```go
+package main
+
+import "fmt"
+
+func main() {
+fmt.Println("Hello, World!")
+}
+```
+
+将上面的`替换成`。这样，Markdown会根据你指定的语言（在这个例子中是Go）来为代码提供适当的高亮。
+
+希望这些信息能帮助你在创建README时保持Markdown格式。

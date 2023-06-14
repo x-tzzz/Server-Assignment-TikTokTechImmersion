@@ -1,0 +1,23 @@
+version: '3.9'
+services:
+  rpc-server:
+    build:
+      context: ./rpc-server
+    ports:
+      - "8888:8888"
+    environment:
+      - SERVICE_NAME=rpc-server
+      - SERVICE_TAGS=rpc
+    depends_on:
+      - etcd
+  http-server:
+    build:
+      context: ./http-server
+    ports:
+      - "8080:8080"
+    environment:
+      - SERVICE_NAME=http-server
+      - SERVICE_TAGS=http
+    depends_on:
+      - etcd
+      - rpc-server
